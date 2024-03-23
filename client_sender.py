@@ -10,7 +10,7 @@ async def connect_to_chat(address, port, userhash=None):
     data = await reader.readline()
     logging.debug(f'connect to the server')
     if userhash:
-        logging.debug(f'User hash: {userhash}')
+        logging.debug(f'Inputted user hash: {userhash}')
         userhash += '\n'
         writer.write(userhash.encode())
         await writer.drain()
@@ -22,6 +22,8 @@ async def connect_to_chat(address, port, userhash=None):
         if not line:
             writer.write(b'\n')
             await writer.drain()
+        else:
+            reader, write = await connect_to_chat(address, port, userhash=line)
     return reader, writer
 
 
@@ -91,13 +93,16 @@ def create_parser():
 if __name__ == '__main__':
     parser = create_parser()
     args = parser.parse_args()
+    account_hash = None
     if args.json:
         with open(args.json, 'r') as file:
             userdata = json.load(file)
+            account_hash = userdata.account_hash
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
-    host = userdata.nickname
-    account_hash = userdata.account_hash
     if args.hash:
         account_hash = args.hash
-    asyncio.run(client_sender(args.host, args.port, account_hash))
+    try:
+        asyncio.run(client_sender(args.host, args.port, account_hash))
+    except KeyboardInterrupt as e:
+        logging.error("Прерывание с клавиатуры")
