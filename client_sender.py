@@ -18,20 +18,39 @@ async def connect_to_chat(address, port, userhash=None):
 
 
 async def send_message(writer):
+    user_message = ''
     while True:
+        line = await aioconsole.ainput('>')
+        if line:
+            user_message += line + '\n'
+        else:
+            print(user_message)
+            logging.debug(f'sending: {user_message}')
+            writer.write(f'{user_message}\n'.encode())
+            await writer.drain()
+            user_message = ''
 
-        print('ololo')
-        writer.write('testmesage\n\n'.encode())
-        await writer.drain()
-        break
+
+async def register_name(reader, writer):
+    line = await reader.readline()
+    print(line.decode())
+    nickname = await aioconsole.ainput('>')
+    writer.write(f'{nickname}\n'.encode())
+    await writer.drain()
+    userdata = await reader.readline()
+    return userdata
 
 
-async def client_sender():
+async def client_sender(userhash):
     address = 'minechat.dvmn.org'
     port = 5050
-    userhash = '3e92ea58-e903-11ee-aae7-0242ac110002'
     reader, writer = await connect_to_chat(address, port, userhash)
     userdata = await reader.readline()
+    if userdata == b'null\n':
+        logging.error('Wrong user hash!')
+        print('Wrong user hash! Check it or create new user.')
+        userdata = await register_name(reader, writer)
+
     userdata = json.loads(userdata.decode())
     username = userdata['nickname']
     print(f'Hello {username}! Post your message below. End it with an empty line.')
@@ -43,6 +62,6 @@ async def client_sender():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-
-    asyncio.run(client_sender())
+    userhash = '3e92ea58-e903-11ee-aae7-0242ac110002!'
+    asyncio.run(client_sender(userhash))
 
