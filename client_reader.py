@@ -34,7 +34,7 @@ async def write_chat_log(adress, port, file_name='log_file.txt'):
 
 def create_parser():
     parser = argparse.ArgumentParser(description='chat reader')
-    parser.add_argument('--host', default='minechat.dvmn.org', help='IP or domain name')
+    parser.add_argument('--host', default='minechat.dvmn.org', type=str, help='IP or domain name')
     parser.add_argument('-p', '--port', default=5000, type=int, help='Port number')
     parser.add_argument('-v', '--verbose', action='store_true', help='Debug')
     parser.add_argument('--history', default='log_file.txt', type=str, help='History file name')

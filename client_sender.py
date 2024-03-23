@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import aioconsole
 import logging
@@ -54,9 +55,7 @@ async def register_name(reader, writer, save_to_file=True):
     return userdata
 
 
-async def client_sender(userhash):
-    address = 'minechat.dvmn.org'
-    port = 5050
+async def client_sender(address, port, userhash):
     reader, writer = await connect_to_chat(address, port, userhash)
     if userhash:
         logging.debug(f'User hash is {userhash}')
@@ -78,9 +77,27 @@ async def client_sender(userhash):
         writer.close()
         await writer.wait_closed()
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    userhash = '3e92ea58-e903-11ee-aae7-0242ac110002'
-    #userhash = ''
-    asyncio.run(client_sender(userhash))
 
+def create_parser():
+    parser = argparse.ArgumentParser(description='message reader')
+    parser.add_argument('--host', default='minechat.dvmn.org', type=str, help='IP or domain name')
+    parser.add_argument('-p', '--port', default=5050, type=int, help='Port number')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Debug')
+    parser.add_argument('-j', '--json', type=str, help='Read user data from json file')
+    parser.add_argument('--hash', type=str, help='User hash')
+    return parser
+
+
+if __name__ == '__main__':
+    parser = create_parser()
+    args = parser.parse_args()
+    if args.json:
+        with open(args.json, 'r') as file:
+            userdata = json.load(file)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    host = userdata.nickname
+    account_hash = userdata.account_hash
+    if args.hash:
+        account_hash = args.hash
+    asyncio.run(client_sender(args.host, args.port, account_hash))
