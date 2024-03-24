@@ -7,8 +7,9 @@ import json
 
 async def connect_to_chat(address, port, userhash=None):
     reader, writer = await asyncio.open_connection(address, port)
-    data = await reader.readline()
-    logging.debug(f'connect to the server')
+    logging.debug(f'Connect to the server {address}:{port}')
+    print(f'Connect ot the server {address}:{port}')
+    await reader.readline()  # необходимо прочитать ответ от сервера, для корректной работы
     if userhash:
         logging.debug(f'Inputted user hash: {userhash}')
         userhash += '\n'
@@ -16,14 +17,9 @@ async def connect_to_chat(address, port, userhash=None):
         await writer.drain()
     else:
         logging.debug(f'User hash not found')
-        print(data.decode())
-        line = await aioconsole.ainput('>')
-        print(line)
-        if not line:
-            writer.write(b'\n')
-            await writer.drain()
-        else:
-            reader, write = await connect_to_chat(address, port, userhash=line)
+        print('User hash not found! Run program with hash or register new user.')
+        writer.write(b'\n')
+        await writer.drain()
     return reader, writer
 
 
@@ -60,11 +56,12 @@ async def register_name(reader, writer, save_to_file=True):
 async def client_sender(address, port, userhash):
     reader, writer = await connect_to_chat(address, port, userhash)
     if userhash:
-        logging.debug(f'User hash is {userhash}')
+        logging.debug(f'Inputed user hash: {userhash}')
         userdata = await reader.readline()
+        logging.debug(f'Userdata  is {userdata}')
         userdata = json.loads(userdata.decode())
     else:
-        logging.debug('No user hash. Creat new user')
+        logging.debug('No user hash. Create new user')
         userdata = await register_name(reader, writer)
     if userdata is None:
         logging.error('Wrong user hash!')
@@ -81,11 +78,12 @@ async def client_sender(address, port, userhash):
 
 
 def create_parser():
-    parser = argparse.ArgumentParser(description='message reader')
+    parser = argparse.ArgumentParser(description='Message sander.')
     parser.add_argument('--host', default='minechat.dvmn.org', type=str, help='IP or domain name')
     parser.add_argument('-p', '--port', default=5050, type=int, help='Port number')
     parser.add_argument('-v', '--verbose', action='store_true', help='Debug')
-    parser.add_argument('-j', '--json', type=str, help='Read user data from json file')
+    parser.add_argument('-j', '--json', type=str, help='Read user data from json file.'
+                                                       '  Key parameters have priory over parameters from json')
     parser.add_argument('--hash', type=str, help='User hash')
     return parser
 
@@ -104,5 +102,5 @@ if __name__ == '__main__':
         account_hash = args.hash
     try:
         asyncio.run(client_sender(args.host, args.port, account_hash))
-    except KeyboardInterrupt as e:
+    except (KeyboardInterrupt, EOFError) as e:
         logging.error("Прерывание с клавиатуры")
