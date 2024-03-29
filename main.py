@@ -6,6 +6,7 @@ import gui
 import logging
 from client_reader import read_chat
 from client_sender import connect_to_chat, send_message
+from tkinter import messagebox
 
 
 class InvalidToken(Exception):
@@ -45,15 +46,15 @@ async def main(host, snd_port, rcv_port,user_hash, save_history=False, log_file=
         await messages_queue.put(old_message.strip())
 
     # it is automatically scheduled as a Task.
-    try:
-        await asyncio.gather(
-            read_msgs(messages_queue, host, rcv_port, save_history, log_file),
-            gui.draw(messages_queue, sending_queue, status_updates_queue),
-            send_msgs(sending_queue, user_hash, host, port=snd_port)
-        )
 
-    except Exception as e:
-        print(e)
+    await asyncio.gather(
+        read_msgs(messages_queue, host, rcv_port, save_history, log_file),
+        gui.draw(messages_queue, sending_queue, status_updates_queue),
+        send_msgs(sending_queue, user_hash, host, port=snd_port),
+        return_exceptions=False
+    )
+
+
 
 
 
@@ -71,9 +72,11 @@ if __name__ == '__main__':
     log_file = env('LOG_FILE')
     user_hash = env('USER_HASH')
 
-
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
+    try:
+        loop.run_until_complete(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
+    except InvalidToken as e:
+        messagebox.showerror("Error", "Invalid Token. Please check your configuration file")
     #asyncio.run(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
 
 
