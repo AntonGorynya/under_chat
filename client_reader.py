@@ -2,23 +2,30 @@ import aiofiles
 import argparse
 import asyncio
 from datetime import datetime
+from gui import ReadConnectionStateChanged
 import logging
 
 
-async def read_chat(address, port):
+async def read_chat(address, port, status_updates_queue=None):
+    if status_updates_queue:
+        status_updates_queue.put_nowait(ReadConnectionStateChanged.INITIATED)
     reader, writer = await asyncio.open_connection(address, port)
+    if status_updates_queue:
+        status_updates_queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
     try:
         data = b''
         while True:
-            data += await reader.readline()
+            data += await asyncio.wait_for(reader.readline(), timeout=5.0)
             if b'\n' in data:
                 now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 message = f'[{now}] {data.decode()}'
                 logging.debug(message)
                 yield message
                 data = b''
-    except (ConnectionResetError, asyncio.exceptions.IncompleteReadError, UnicodeDecodeError):
+    except (ConnectionResetError, asyncio.TimeoutError, asyncio.exceptions.IncompleteReadError, UnicodeDecodeError):
         logging.error("Соединение разорвано.")
+        if status_updates_queue:
+            status_updates_queue.put_nowait(ReadConnectionStateChanged.CLOSED)
     finally:
         writer.close()
         await writer.wait_closed()

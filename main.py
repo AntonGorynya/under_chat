@@ -14,29 +14,33 @@ class InvalidToken(Exception):
 
 
 async def read_msgs(
-        messages_queue, host='minechat.dvmn.org', port=5000, save_history=True, filepath='log.txt'):
+        messages_queue, status_updates_queue, host='minechat.dvmn.org', port=5000, save_history=True, filepath='log.txt'):
     async with aiofiles.open(filepath, 'a') as file:
-        async for message in read_chat(host, port):
+        async for message in read_chat(host, port, status_updates_queue):
             if save_history:
                 await file.write(message)
             await messages_queue.put(message.strip())
 
 
-async def send_msgs(queue, user_hash, host='minechat.dvmn.org', port=5050):
+async def send_msgs(msgs_queue, status_updates_queue, user_hash, host='minechat.dvmn.org', port=5050):
+    status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
     reader, writer = await connect_to_chat(host, port, user_hash)
+    status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
     userdata = await reader.readline()
     userdata = json.loads(userdata.decode())
     if not userdata:
         raise InvalidToken
+    status_updates_queue.put_nowait(gui.NicknameReceived(userdata['nickname']))
     logging.debug(userdata)
     while True:
-        msg = await queue.get()
+        msg = await msgs_queue.get()
+        print(msg)
         logging.debug(msg)
         writer.write(f'{msg}\n\n'.encode())
         await writer.drain()
 
 
-async def main(host, snd_port, rcv_port,user_hash, save_history=False, log_file='log.txt'):
+async def main(host, snd_port, rcv_port, user_hash, save_history=False, log_file='log.txt'):
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
@@ -48,9 +52,9 @@ async def main(host, snd_port, rcv_port,user_hash, save_history=False, log_file=
     # it is automatically scheduled as a Task.
 
     await asyncio.gather(
-        read_msgs(messages_queue, host, rcv_port, save_history, log_file),
+        read_msgs(messages_queue, status_updates_queue, host, rcv_port, save_history, log_file),
         gui.draw(messages_queue, sending_queue, status_updates_queue),
-        send_msgs(sending_queue, user_hash, host, port=snd_port),
+        send_msgs(sending_queue, status_updates_queue, user_hash, host, port=snd_port),
         return_exceptions=False
     )
 
@@ -72,7 +76,8 @@ if __name__ == '__main__':
     log_file = env('LOG_FILE')
     user_hash = env('USER_HASH')
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    #loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
     except InvalidToken as e:
