@@ -49,7 +49,7 @@ async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
         watchdog_queue.put_nowait('Connection is alive. Message sent')
 
 
-async def watch_for_connection(logging_level=logging.DEBUG, delay=2):
+async def watch_for_connection(logging_level=logging.DEBUG, delay=1):
     logger = logging.getLogger('watchdog_logger')
     logging.basicConfig(format='[%(created)f] %(message)s')
     logger.setLevel(logging_level)
@@ -60,38 +60,26 @@ async def watch_for_connection(logging_level=logging.DEBUG, delay=2):
                 logger.debug(msg)
         except TimeoutError:
             logger.debug(f'{delay}s timeout is elapsed')
+            raise ConnectionError
 
 
-async def handle_connection():
-    task1 = asyncio.create_task(read_msgs(host, rcv_port, save_history, log_file))
-    task2 = asyncio.create_task(read_msgs(host, rcv_port, save_history, log_file))
+async def handle_connection(host, snd_port, rcv_port, save_history, log_file, user_hash):
+    while True:
+        try:
+            print('Test')
+            async with create_task_group() as tg:
+                tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+                tg.start_soon(read_msgs, host, rcv_port, save_history, log_file)
+                tg.start_soon(send_msgs, user_hash, host, snd_port)
+                tg.start_soon(watch_for_connection)
+        except* ConnectionError:
+            status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
+            status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
 
 
-async def main(host, snd_port, rcv_port, user_hash, save_history=False, log_file='log.txt'):
-    # messages_queue = asyncio.Queue()
-    # sending_queue = asyncio.Queue()
-    # status_updates_queue = asyncio.Queue()
-    # watchdog_queue = asyncio.Queue()
-
-    watchdog_queue.put_nowait('Program start')
-    with open(log_file, 'r') as file:
-        watchdog_queue.put_nowait('Reading history...')
-        old_messages = file.readlines()
-    for old_message in old_messages:
-        await messages_queue.put(old_message.strip())
-    watchdog_queue.put_nowait('History loaded')
-
-    # it is automatically scheduled as a Task.
-    await asyncio.gather(
-        read_msgs(host, rcv_port, save_history, log_file),
-        gui.draw(messages_queue, sending_queue, status_updates_queue),
-        send_msgs(user_hash, host, port=snd_port),
-        watch_for_connection(),
-        return_exceptions=False
-    )
 
 
-if __name__ == '__main__':
+async def main() -> None:
     env = Env()
     env.read_env()
 
@@ -102,12 +90,30 @@ if __name__ == '__main__':
     log_file = env('LOG_FILE')
     user_hash = env('USER_HASH')
 
-    loop = asyncio.new_event_loop()
-    #loop = asyncio.get_event_loop()
+    watchdog_queue.put_nowait('Program start')
+    with open(log_file, 'r') as file:
+        watchdog_queue.put_nowait('Reading history...')
+        old_messages = file.readlines()
+    for old_message in old_messages:
+        await messages_queue.put(old_message.strip())
+    watchdog_queue.put_nowait('History loaded')
+
+    # async with create_task_group() as tg:
+    #     tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+    #     tg.start_soon(watch_for_connection)
+    #     tg.start_soon(read_msgs, host, rcv_port, save_history, log_file)
+    #     tg.start_soon(send_msgs, user_hash, host, snd_port)
+        #tg.start_soon(handle_connection)
+
+    await handle_connection(host, snd_port, rcv_port, save_history, log_file, user_hash)
+
+
+if __name__ == '__main__':
+    #loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
+        #loop.run_until_complete(main())
+        run(main)
     except InvalidToken as e:
         messagebox.showerror("Error", "Invalid Token. Please check your configuration file")
     except Exception as e:
         print(e)
-    #asyncio.run(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
