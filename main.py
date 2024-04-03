@@ -4,6 +4,9 @@ from environs import Env
 import json
 import gui
 import logging
+from anyio import create_task_group, run
+from functools import wraps
+from async_timeout import timeout
 from client_reader import read_chat
 from client_sender import connect_to_chat, send_message
 from tkinter import messagebox
@@ -13,6 +16,7 @@ messages_queue = asyncio.Queue()
 sending_queue = asyncio.Queue()
 status_updates_queue = asyncio.Queue()
 watchdog_queue = asyncio.Queue()
+
 
 class InvalidToken(Exception):
     pass
@@ -45,14 +49,22 @@ async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
         watchdog_queue.put_nowait('Connection is alive. Message sent')
 
 
-async def watch_for_connection(logging_level=logging.DEBUG):
+async def watch_for_connection(logging_level=logging.DEBUG, delay=2):
     logger = logging.getLogger('watchdog_logger')
     logging.basicConfig(format='[%(created)f] %(message)s')
     logger.setLevel(logging_level)
     while True:
-        msg = await watchdog_queue.get()
-        logger.debug(msg)
+        try:
+            async with timeout(delay) as cm:
+                msg = await watchdog_queue.get()
+                logger.debug(msg)
+        except TimeoutError:
+            logger.debug(f'{delay}s timeout is elapsed')
 
+
+async def handle_connection():
+    task1 = asyncio.create_task(read_msgs(host, rcv_port, save_history, log_file))
+    task2 = asyncio.create_task(read_msgs(host, rcv_port, save_history, log_file))
 
 
 async def main(host, snd_port, rcv_port, user_hash, save_history=False, log_file='log.txt'):
@@ -70,7 +82,6 @@ async def main(host, snd_port, rcv_port, user_hash, save_history=False, log_file
     watchdog_queue.put_nowait('History loaded')
 
     # it is automatically scheduled as a Task.
-
     await asyncio.gather(
         read_msgs(host, rcv_port, save_history, log_file),
         gui.draw(messages_queue, sending_queue, status_updates_queue),
@@ -100,5 +111,3 @@ if __name__ == '__main__':
     except Exception as e:
         print(e)
     #asyncio.run(main(host, snd_port, rcv_port, user_hash, save_history=save_history, log_file=log_file))
-
-
