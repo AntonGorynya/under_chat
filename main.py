@@ -10,7 +10,12 @@ from async_timeout import timeout
 from client_reader import read_chat
 from client_sender import connect_to_chat, send_message
 from tkinter import messagebox
+from os import path
 
+
+logger = logging.getLogger('watchdog_logger')
+logging.basicConfig(format='[%(created)f] %(message)s')
+logger.setLevel(logging.DEBUG)
 
 messages_queue = asyncio.Queue()
 sending_queue = asyncio.Queue()
@@ -22,9 +27,22 @@ class InvalidToken(Exception):
     pass
 
 
+def reconnect(func):
+    async def wrapper(*args, **kwargs):
+        while True:
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                logger.error(f'Lose connection! waiting 5s, {e}')
+                await asyncio.sleep(5)
+    return wrapper
+
+
+
+@reconnect
 async def read_msgs(host='minechat.dvmn.org', port=5000, save_history=True, filepath='log.txt'):
     async with aiofiles.open(filepath, 'a') as file:
-        async for message in read_chat(host, port, status_updates_queue):
+        async for message in read_chat(host, port, status_updates_queue, rise_exception=True):
             if save_history:
                 await file.write(message)
             watchdog_queue.put_nowait('Connection is alive. New message in chat')
@@ -49,32 +67,36 @@ async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
         watchdog_queue.put_nowait('Connection is alive. Message sent')
 
 
-async def watch_for_connection(logging_level=logging.DEBUG, delay=1):
-    logger = logging.getLogger('watchdog_logger')
-    logging.basicConfig(format='[%(created)f] %(message)s')
-    logger.setLevel(logging_level)
+async def watch_for_connection(delay=1, max_counter=3):
+    counter = 0
     while True:
         try:
             async with timeout(delay) as cm:
                 msg = await watchdog_queue.get()
                 logger.debug(msg)
+                counter = 0
         except TimeoutError:
             logger.debug(f'{delay}s timeout is elapsed')
-            raise ConnectionError
+            counter += 1
+            if counter == max_counter:
+                logger.debug(f'{max_counter} packets miss. Trying to reconnect')
+                #raise ConnectionError
 
 
 async def handle_connection(host, snd_port, rcv_port, save_history, log_file, user_hash):
     while True:
         try:
-            print('Test')
             async with create_task_group() as tg:
                 tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
+                tg.start_soon(watch_for_connection)
                 tg.start_soon(read_msgs, host, rcv_port, save_history, log_file)
                 tg.start_soon(send_msgs, user_hash, host, snd_port)
-                tg.start_soon(watch_for_connection)
-        except* ConnectionError:
+
+
+        except*ConnectionError:
             status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
+            print(e)
 
 
 
@@ -90,20 +112,17 @@ async def main() -> None:
     log_file = env('LOG_FILE')
     user_hash = env('USER_HASH')
 
-    watchdog_queue.put_nowait('Program start')
-    with open(log_file, 'r') as file:
-        watchdog_queue.put_nowait('Reading history...')
-        old_messages = file.readlines()
-    for old_message in old_messages:
-        await messages_queue.put(old_message.strip())
-    watchdog_queue.put_nowait('History loaded')
-
-    # async with create_task_group() as tg:
-    #     tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
-    #     tg.start_soon(watch_for_connection)
-    #     tg.start_soon(read_msgs, host, rcv_port, save_history, log_file)
-    #     tg.start_soon(send_msgs, user_hash, host, snd_port)
-        #tg.start_soon(handle_connection)
+    #watchdog_queue.put_nowait('Program start')
+    logger.debug('Program start')
+    if path.exists(log_file):
+        with open(log_file, 'r') as file:
+            watchdog_queue.put_nowait('Reading history...')
+            old_messages = file.readlines()
+        for old_message in old_messages:
+            await messages_queue.put(old_message.strip())
+        watchdog_queue.put_nowait('History loaded')
+    else:
+        logger.debug(f'Log file {log_file} does not exist')
 
     await handle_connection(host, snd_port, rcv_port, save_history, log_file, user_hash)
 

@@ -6,7 +6,8 @@ from gui import ReadConnectionStateChanged
 import logging
 
 
-async def read_chat(address, port, status_updates_queue=None):
+async def read_chat(address, port, status_updates_queue=None, timeout=3.0, rise_exception=False):
+    logging.debug('Starting reader')
     if status_updates_queue:
         status_updates_queue.put_nowait(ReadConnectionStateChanged.INITIATED)
     reader, writer = await asyncio.open_connection(address, port)
@@ -15,7 +16,7 @@ async def read_chat(address, port, status_updates_queue=None):
     try:
         data = b''
         while True:
-            data += await asyncio.wait_for(reader.readline(), timeout=5.0)
+            data += await asyncio.wait_for(reader.readline(), timeout=timeout)
             if b'\n' in data:
                 now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 message = f'[{now}] {data.decode()}'
@@ -29,6 +30,8 @@ async def read_chat(address, port, status_updates_queue=None):
     finally:
         writer.close()
         await writer.wait_closed()
+        if rise_exception:
+            raise TimeoutError
 
 
 async def write_chat_log(adress, port, file_name='log_file.txt'):
