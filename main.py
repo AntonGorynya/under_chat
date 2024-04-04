@@ -29,7 +29,7 @@ class InvalidToken(Exception):
     pass
 
 
-def reconnect(reconnect_delay=5, state=None):
+def reconnect(reconnect_delay=3, state=None):
     def decorator(func):
         async def wrapper(*args, **kwargs):
             while True:
@@ -104,6 +104,8 @@ async def handle_connection(host, snd_port, rcv_port, save_history, log_file, us
             tg.start_soon(send_msgs, user_hash, host, snd_port)
     except* InvalidToken:
         messagebox.showerror("Error", "Invalid Token. Please check your configuration file")
+    except* gui.TkAppClosed:
+        print('Closing')
 
 
 
@@ -133,4 +135,7 @@ async def main() -> None:
 
 
 if __name__ == '__main__':
-    run(main)
+    try:
+        run(main)
+    except KeyboardInterrupt:
+        print('Closing')
