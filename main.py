@@ -57,8 +57,8 @@ async def read_msgs(host='minechat.dvmn.org', port=5000, save_history=True, file
 @reconnect(1, gui.SendingConnectionStateChanged.INITIATED)
 async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
     status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
-    watchdog_queue.put_nowait('Connection is alive. Prompt before auth')
     reader, writer = await connect_to_chat(host, port, user_hash)
+    watchdog_queue.put_nowait('Connection is alive. Prompt before auth')
     status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
     userdata = await reader.readline()
     userdata = json.loads(userdata.decode())
@@ -79,20 +79,27 @@ async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
         watchdog_queue.put_nowait('Connection is alive. Message sent')
 
 
-async def watch_for_connection(delay=1, max_counter=3):
-    counter = 0
+async def watch_for_connection(delay=1, max_counter=3, dead_interval=2*5):
+    attempt_counter = 0
+    total_attempt_counter = 0
     while True:
         try:
             async with timeout(delay) as cm:
                 msg = await watchdog_queue.get()
-                logger.debug(msg)
-                counter = 0
+                if msg:
+                    attempt_counter = 0
+                    total_attempt_counter = 0
         except TimeoutError:
             logger.debug(f'{delay}s timeout is elapsed')
-            counter += 1
-            if counter == max_counter:
-                logger.debug(f'{max_counter} packets miss. Trying to reconnect')
-                #raise ConnectionError
+            attempt_counter += 1
+            total_attempt_counter += 1
+            print(attempt_counter, total_attempt_counter, dead_interval)
+            if attempt_counter == max_counter:
+                logger.debug(f'{max_counter} packets miss. Trying to reconnect...')
+                attempt_counter = 0
+            if total_attempt_counter*max_counter >= dead_interval:
+                logger.debug(f'Server does not response for a long time')
+                raise TimeoutError
 
 
 async def handle_connection(host, snd_port, rcv_port, save_history, log_file, user_hash):
@@ -104,7 +111,7 @@ async def handle_connection(host, snd_port, rcv_port, save_history, log_file, us
             tg.start_soon(send_msgs, user_hash, host, snd_port)
     except* InvalidToken:
         messagebox.showerror("Error", "Invalid Token. Please check your configuration file")
-    except* gui.TkAppClosed:
+    except* (gui.TkAppClosed, TimeoutError):
         print('Closing')
 
 
