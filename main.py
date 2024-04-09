@@ -125,8 +125,8 @@ async def main() -> None:
     host = env('HOST', 'minechat.dvmn.org')
     snd_port = env.int('SND_PORT', 5050)
     rcv_port = env.int('RCV_PORT', 5000)
-    save_history = env.bool('SAVE_HISTORY')
-    log_file = env('LOG_FILE')
+    save_history = env.bool('SAVE_HISTORY', True)
+    log_file = env('LOG_FILE', 'log.txt')
     user_hash = env('USER_HASH')
 
     logger.debug('Program start')
