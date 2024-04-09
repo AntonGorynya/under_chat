@@ -7,10 +7,9 @@ import json
 import gui
 import logging
 from anyio import create_task_group, run
-from functools import wraps
 from async_timeout import timeout
 from client_reader import read_chat
-from client_sender import connect_to_chat, send_message
+from client_sender import connect_to_chat
 from tkinter import messagebox
 from os import path
 
@@ -26,7 +25,11 @@ watchdog_queue = asyncio.Queue()
 
 
 class InvalidToken(Exception):
-    pass
+    def __init__(self, userhash=None):
+        self.msg = f'Invalid hash: «{userhash}»' if userhash else 'Empty hash'
+
+    def __str__(self):
+        return self.msg
 
 
 def reconnect(reconnect_delay=3, state=None):
@@ -63,7 +66,7 @@ async def send_msgs(user_hash, host='minechat.dvmn.org', port=5050):
     userdata = await reader.readline()
     userdata = json.loads(userdata.decode())
     if not userdata:
-        raise InvalidToken
+        raise InvalidToken(user_hash)
     watchdog_queue.put_nowait('Connection is alive. Authorization done')
     status_updates_queue.put_nowait(gui.NicknameReceived(userdata['nickname']))
     while True:
@@ -109,12 +112,11 @@ async def handle_connection(host, snd_port, rcv_port, save_history, log_file, us
             tg.start_soon(watch_for_connection)
             tg.start_soon(read_msgs, host, rcv_port, save_history, log_file)
             tg.start_soon(send_msgs, user_hash, host, snd_port)
-    except* InvalidToken:
-        messagebox.showerror("Error", "Invalid Token. Please check your configuration file")
+    except* InvalidToken as eg:
+        msg = eg.exceptions[0]
+        messagebox.showerror("Error", f"{msg}. Please check your configuration file")
     except* (gui.TkAppClosed, TimeoutError):
         print('Closing')
-
-
 
 
 async def main() -> None:
@@ -145,4 +147,4 @@ if __name__ == '__main__':
     try:
         run(main)
     except KeyboardInterrupt:
-        print('Closing')
+        print('Closing!')
