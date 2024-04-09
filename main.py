@@ -10,7 +10,7 @@ from anyio import create_task_group, run
 from async_timeout import timeout
 from client_reader import read_chat
 from client_sender import connect_to_chat
-from tkinter import messagebox
+from tkinter import messagebox, TclError
 from os import path
 
 
@@ -114,7 +114,7 @@ async def handle_connection(host, snd_port, rcv_port, save_history, log_file, us
     except* InvalidToken as eg:
         msg = eg.exceptions[0]
         messagebox.showerror("Error", f"{msg}. Please check your configuration file")
-    except* (gui.TkAppClosed, TimeoutError):
+    except* (gui.TkAppClosed, TimeoutError, TclError):
         print('Closing')
 
 
