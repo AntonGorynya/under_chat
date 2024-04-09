@@ -96,7 +96,6 @@ async def watch_for_connection(delay=1, max_counter=3, dead_interval=2*5):
             logger.debug(f'{delay}s timeout is elapsed')
             attempt_counter += 1
             total_attempt_counter += 1
-            print(attempt_counter, total_attempt_counter, dead_interval)
             if attempt_counter == max_counter:
                 logger.debug(f'{max_counter} packets miss. Trying to reconnect...')
                 attempt_counter = 0
