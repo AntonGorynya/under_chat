@@ -11,7 +11,7 @@ async def register(host, port, username_entry, info_label):
     username = username_entry.get()
     while True:
         try:
-            msg = 'Введити никнейм'
+            msg = 'Введите никнейм'
             if username:
                 reader, writer = await asyncio.open_connection(host, port)
                 await reader.readline()
@@ -23,10 +23,11 @@ async def register(host, port, username_entry, info_label):
                 userdata = await reader.readline()
                 userdata = json.loads(userdata.decode())
                 account_hash = userdata['account_hash']
-                with open('.env', 'w+') as file:
+                with open('.env', 'r') as file:
                     rows = file.readlines()
-                    rows = [row for row in rows if 'USER_HASH' not in rows]
-                    rows.append(f'USER_HASH={account_hash}')
+                    rows = [row for row in rows if 'USER_HASH' not in row]
+                    rows.append(f'USER_HASH={account_hash}\n')
+                with open('.env', 'w') as file:
                     file.writelines(rows)
                 msg = f'Вы успешно зарегестрированы!'
             info_label['text'] = msg
@@ -34,8 +35,6 @@ async def register(host, port, username_entry, info_label):
         except (TimeoutError, gaierror):
             info_label['text'] = 'Отсутсвует подключение к интернету'
             return -1
-
-
 
 
 async def draw(host, port):
@@ -59,7 +58,6 @@ async def draw(host, port):
 
     async with create_task_group() as tg:
         tg.start_soon(update_tk, root_frame)
-    root.destroy()
 
 
 async def main():
