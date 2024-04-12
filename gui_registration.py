@@ -1,6 +1,6 @@
 import asyncio
 import json
-from tkinter import *
+import tkinter as tk
 from environs import Env
 from anyio import create_task_group, run
 from gui import update_tk, TkAppClosed
@@ -38,15 +38,15 @@ async def register(host, port, username_entry, info_label):
 
 
 async def draw(host, port):
-    root = Tk()
+    root = tk.Tk()
     root.title('Registration form')
     root.geometry('250x200')
-    root_frame = Frame()
+    root_frame = tk.Frame()
 
-    agenda = Label(root, text='Добро пожаловать в чат по Minecraft.\n Заполните форму регистрации ниже')
-    username_entry = Entry(root, width=120)
-    info_label = Label(root, width=120)
-    registration_button = Button(
+    agenda = tk.Label(root, text='Добро пожаловать в чат по Minecraft.\n Заполните форму регистрации ниже')
+    username_entry = tk.Entry(root, width=120)
+    info_label = tk.Label(root, width=120)
+    registration_button = tk.Button(
         root,
         text='Зарегистрироваться',
         command=lambda: asyncio.create_task(register(host, port, username_entry, info_label))
